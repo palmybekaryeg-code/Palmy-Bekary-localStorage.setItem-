@@ -33,7 +33,7 @@
             color: #444;
             font-size: 14px;
         }
-        input, textarea {
+        input, textarea, select {
             width: 100%;
             padding: 10px;
             margin-top: 5px;
@@ -41,6 +41,7 @@
             border-radius: 8px;
             box-sizing: border-box;
             font-size: 14px;
+            background-color: #fff;
         }
         .btn {
             background-color: #25D366;
@@ -83,12 +84,21 @@
 <div class="card">
     <h2>تحديد الموقع وإرسال الطلب 📍</h2>
     
-    <!-- عرض رقم الواتساب الذي سيتم الإرسال عليه -->
-    <div class="info-box" id="target-phone-info">
-        رقم استقبال الطلبات: <b>جاري التحميل...</b>
-    </div>
-
     <form id="orderForm" onsubmit="sendToWhatsApp(event)">
+        
+        <!-- اختيار الفرع -->
+        <label>🏢 اختر الفرع المطلوب:</label>
+        <select id="branchSelect" required onchange="updateBranchInfo()">
+            <option value="" disabled selected>-- اختر الفرع القريب منك --</option>
+            <option value="201158140838">فرع بالميه الرئيسي</option>
+            <!-- يمكنك إضافة فروع أخرى هنا مستقبلاً بنفس النمط -->
+        </select>
+
+        <!-- عرض رقم الواتساب الخاص بالفرع المختار -->
+        <div class="info-box" id="target-phone-info" style="margin-top: 10px;">
+            رقم الفرع لاستقبال الطلبات: <b>برجاء اختيار الفرع</b>
+        </div>
+
         <label>👤 اسم العميل:</label>
         <input type="text" id="customerName" required placeholder="أدخل اسمك الكريم">
 
@@ -105,14 +115,20 @@
 </div>
 
 <script>
-    // ⚠️ ضع رقم الواتساب الخاص بالفرع هنا بالصيغة الدولية (بدون علامة + أو أصفار في البداية)
-    // مثال لمصر: 201012345678
-    const phoneNumber = "201000000000"; 
-
-    // عرض الرقم الموجه إليه الرسالة في واجهة الصفحة للمستخدم
-    document.getElementById("target-phone-info").innerHTML = `رقم استقبال الطلبات (واتساب): <b>+${phoneNumber}</b>`;
-
     let googleMapsUrl = "";
+    let selectedPhoneNumber = "";
+
+    // دالة لتحديث رقم الواتساب وعرضه بناءً على الفرع المختار
+    function updateBranchInfo() {
+        const selectBox = document.getElementById("branchSelect");
+        selectedPhoneNumber = selectBox.value;
+        const branchName = selectBox.options[selectBox.selectedIndex].text;
+
+        if (selectedPhoneNumber) {
+            document.getElementById("target-phone-info").innerHTML = 
+                `الفرع: <b>${branchName}</b><br>رقم الواتساب: <b>+${selectedPhoneNumber}</b>`;
+        }
+    }
 
     window.onload = function() {
         if ("geolocation" in navigator) {
@@ -132,18 +148,17 @@
 
         document.getElementById("status").innerText = "جاري جلب اسم الشارع والعنوان تلقائياً...";
 
-        // جلب العنوان النصي باستخدام خدمة OpenStreetMap المجانية
         fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=ar`)
             .then(response => response.json())
             .then(data => {
                 const address = data.display_name || "تعذر تحديد اسم الشارع بدقة";
                 document.getElementById("customerAddress").value = address;
-                document.getElementById("status").innerText = "تم تحديد الموقع والعنوان بنجاح! يرجى إكمال بياناتك.";
+                document.getElementById("status").innerText = "تم تحديد الموقع والعنوان بنجاح! اختر الفرع وأكمل بياناتك.";
                 document.getElementById("whatsapp-btn").style.display = "block";
             })
             .catch(() => {
                 document.getElementById("customerAddress").value = "عنوان تقريبي (يرجى التعديل إذا لزم الأمر)";
-                document.getElementById("status").innerText = "تم تحديد الموقع، يرجى مراجعة العنوان وإكمال البيانات.";
+                document.getElementById("status").innerText = "تم تحديد الموقع، يرجى اختيار الفرع ومراجعة البيانات.";
                 document.getElementById("whatsapp-btn").style.display = "block";
             });
     }
@@ -157,20 +172,29 @@
     function sendToWhatsApp(event) {
         event.preventDefault();
 
+        const branchSelect = document.getElementById("branchSelect");
+        const branchName = branchSelect.options[branchSelect.selectedIndex].text;
+        selectedPhoneNumber = branchSelect.value;
+
+        if (!selectedPhoneNumber) {
+            alert("برجاء اختيار الفرع المراد إرسال الطلب إليه.");
+            return;
+        }
+
         const name = document.getElementById("customerName").value;
         const phone = document.getElementById("customerPhone").value;
         const address = document.getElementById("customerAddress").value;
 
-        // صياغة الرسالة النهائية المنظمة
-        const textMessage = `طلب جديد من موقع الفرع / الواتساب: +${phoneNumber}\n\n` +
+        // صياغة الرسالة النهائية مع توضيح الفرع المستقبل
+        const textMessage = `طلب جديد موجه إلى: *${branchName}*\n\n` +
                             `👤 *اسم العميل:* ${name}\n` +
                             `📞 *رقم التلفون:* ${phone}\n` +
                             `📍 *العنوان التفصيلي:* ${address}\n\n` +
                             `🗺️ *رابط الخريطة (Location):* \n${googleMapsUrl}`;
 
-        const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(textMessage)}`;
+        const whatsappUrl = `https://wa.me/${selectedPhoneNumber}?text=${encodeURIComponent(textMessage)}`;
 
-        // فتح رابط الواتساب بالرسالة الجاهزة
+        // فتح واتساب الفرع المختار مباشرة بالرسالة
         window.open(whatsappUrl, '_blank');
     }
 </script>
